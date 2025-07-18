@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Steam Library Analyzer</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; background-color: #f8f9fa; }
+    input, button { padding: 10px; margin: 8px 0; width: 100%; max-width: 500px; }
+    pre { background: #212529; color: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto; }
+    .error { color: red; }
+    .container { max-width: 600px; margin: auto; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎮 Steam Library Analyzer</h1>
+    <p>Enter your SteamID64 or Profile URL and Steam API Key to analyze your library.</p>
+    <input id="steamID" placeholder="SteamID64 or Profile URL" />
+    <input id="apiKey" placeholder="Steam API Key" />
+    <button onclick="fetchSteamData()">Analyze My Library</button>
+    <div id="output"></div>
+    <button id="downloadBtn" style="display:none;" onclick="downloadCSV()">Download CSV</button>
+  </div>
+  <script>
+    let lastData = null;
+    async function resolveSteamID64(input, apiKey) {
+      if (/^\d{17}$/.test(input)) return input;
+      const vanityUrl = input.replace("https://steamcommunity.com/id/", "").replace(/\/$/, "");
+      const url = `https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?key=${apiKey}&vanityurl=${vanityUrl}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Steam API error: ${response.status}`);
+      const data = await response.json();
+      if (data.response.success === 1) return data.response.steamid;
+      throw new Error("Failed to resolve vanity URL. Check your Profile URL and API Key.");
+    }
+    async function fetchSteamData() {
+      const steamIDInput = document.getElementById('steamID').value.trim();
+      const apiKey = document.getElementById('apiKey').value.trim();
+      const output = document.getElementById('output');
+      const downloadBtn = document.getElementById('downloadBtn');
+      output.innerHTML = "Loading...";
+      downloadBtn.style.display = "none";
+      try {
+        const steamID = await resolveSteamID64(steamIDInput, apiKey);
+        const gamesURL = `https://api.steampowered.com/ISteamUser/GetOwnedGames/v1/?key=${apiKey}&steamid=${steamID}&include_appinfo=true`;
+        const response = await fetch(gamesURL);
+        if (!response.ok) throw new Error(`Steam API error: ${response.status}`);
+        const data = await response.json();
+        lastData = data;
+        output.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+        downloadBtn.style.display = "inline-block";
+      } catch (err) {
+        console.error(err);
+        output.innerHTML = `<p class="error">${err.message}</p>`;
+      }
+    }
+    function downloadCSV() {
+      if (!lastData || !lastData.response || !lastData.response.games) {
+        alert("No game data available to export.");
+        return;
+      }
+      const games = lastData.response.games;
+      const headers = ["AppID", "Name", "Playtime (Hours)"];
+      const rows = games.map(game => [
+        game.appid,
+        game.name.replace(/"/g, '""'),
+        (game.playtime_forever / 60).toFixed(2)
+      ]);
+      let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(r => r.join(",")).join("\n");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", "steam_library.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+</body>
+</html>
