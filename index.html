@@ -24,16 +24,18 @@
   </div>
   <script>
     let lastData = null;
+
     async function resolveSteamID64(input, apiKey) {
       if (/^\d{17}$/.test(input)) return input;
       const vanityUrl = input.replace("https://steamcommunity.com/id/", "").replace(/\/$/, "");
-      const url = `https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?key=${apiKey}&vanityurl=${vanityUrl}`;
-      const response = await fetch(url);
+      const url = `https://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=${apiKey}&vanityurl=${vanityUrl}`;
+      const response = await fetch(url, { mode: 'cors' });
       if (!response.ok) throw new Error(`Steam API error: ${response.status}`);
       const data = await response.json();
       if (data.response.success === 1) return data.response.steamid;
       throw new Error("Failed to resolve vanity URL. Check your Profile URL and API Key.");
     }
+
     async function fetchSteamData() {
       const steamIDInput = document.getElementById('steamID').value.trim();
       const apiKey = document.getElementById('apiKey').value.trim();
@@ -43,8 +45,8 @@
       downloadBtn.style.display = "none";
       try {
         const steamID = await resolveSteamID64(steamIDInput, apiKey);
-        const gamesURL = `https://api.steampowered.com/ISteamUser/GetOwnedGames/v1/?key=${apiKey}&steamid=${steamID}&include_appinfo=true`;
-        const response = await fetch(gamesURL);
+        const gamesURL = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${apiKey}&steamid=${steamID}&include_appinfo=true&format=json`;
+        const response = await fetch(gamesURL, { mode: 'cors' });
         if (!response.ok) throw new Error(`Steam API error: ${response.status}`);
         const data = await response.json();
         lastData = data;
@@ -52,9 +54,10 @@
         downloadBtn.style.display = "inline-block";
       } catch (err) {
         console.error(err);
-        output.innerHTML = `<p class="error">${err.message}</p>`;
+        output.innerHTML = `<p class="error">${err.message}</p><p class="error">Possible CORS issue. Try adding a proxy or deploy to HTTPS.</p>`;
       }
     }
+
     function downloadCSV() {
       if (!lastData || !lastData.response || !lastData.response.games) {
         alert("No game data available to export.");
