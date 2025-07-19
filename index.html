@@ -34,8 +34,8 @@
   <div class="container">
     <h1>🎮 Steam Library Analyzer</h1>
 
-    <label>SteamID64 or Profile URL:</label>
-    <input type="text" id="steamId" placeholder="Enter SteamID64 or Profile URL">
+    <label>SteamID64 (numbers only):</label>
+    <input type="text" id="steamId" placeholder="Enter SteamID64 (numeric)">
     <label>Steam API Key:</label>
     <input type="text" id="apiKey" placeholder="Enter your Steam API key">
     <label>Region:</label>
@@ -72,18 +72,25 @@
     }
 
     async function fetchJSON(url) {
-      const response = await fetch(url);
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Error fetching ${url}:`, errorText);
-        throw new Error(`Fetch failed: ${response.status} ${response.statusText}`);
+      try {
+        const response = await fetch(url);
+        if (!response.ok) {
+          console.error(`HTTP ${response.status} - ${response.statusText}`);
+          const text = await response.text();
+          console.error('Response text:', text);
+          throw new Error(`Fetch failed: ${response.status}`);
+        }
+        return response.json();
+      } catch (e) {
+        console.error('Fetch error:', e);
+        throw e;
       }
-      return response.json();
     }
 
     async function analyzeLibrary() {
-      const apiKey = document.getElementById('apiKey').value.trim();
-      const steamId = document.getElementById('steamId').value.trim();
+      let apiKey = document.getElementById('apiKey').value.trim();
+      let steamId = document.getElementById('steamId').value.trim();
+      steamId = steamId.replace(/\D/g, ''); // Only digits
       localStorage.setItem('apiKey', apiKey);
       localStorage.setItem('steamId', steamId);
       const region = document.getElementById('region').value;
@@ -98,7 +105,9 @@
       output.innerHTML = '<p>Loading...</p>';
 
       try {
-        const libraryData = await fetchJSON(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${apiKey}&steamid=${steamId}&include_appinfo=true&include_played_free_games=true`);
+        const libraryURL = `https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${apiKey}&steamid=${steamId}&include_appinfo=true&include_played_free_games=true`;
+        console.log('Fetching:', libraryURL);
+        const libraryData = await fetchJSON(libraryURL);
         const games = libraryData.response.games;
 
         games.sort((a, b) => (b.playtime_forever + (b.rtime_last_played || 0) * 0.5) - (a.playtime_forever + (a.rtime_last_played || 0) * 0.5));
@@ -156,7 +165,7 @@
         });
 
       } catch (err) {
-        console.error(err);
+        console.error('Analyze failed:', err);
         output.innerHTML = `<p class="error">${err.message}</p>`;
       }
     }
