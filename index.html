@@ -33,7 +33,7 @@
 <body>
   <div class="container">
     <h1>🎮 Steam Library Analyzer</h1>
-    
+
     <label>SteamID64 or Profile URL:</label>
     <input type="text" id="steamId" placeholder="Enter SteamID64 or Profile URL">
     <label>Steam API Key:</label>
@@ -71,20 +71,6 @@
       document.getElementById('steamId').value = localStorage.getItem('steamId') || '';
     }
 
-    async function fetchWithCORS(url) {
-      try {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`Network error: ${response.status}`);
-        return response.json();
-      } catch (e) {
-        console.error("Direct fetch failed, trying CORS proxy...");
-        const proxyUrl = 'https://api.allorigins.win/raw?url=';
-        const proxiedResponse = await fetch(proxyUrl + encodeURIComponent(url));
-        if (!proxiedResponse.ok) throw new Error(`CORS proxy failed: ${proxiedResponse.status}`);
-        return proxiedResponse.json();
-      }
-    }
-
     async function analyzeLibrary() {
       const apiKey = document.getElementById('apiKey').value.trim();
       const steamId = document.getElementById('steamId').value.trim();
@@ -102,17 +88,21 @@
       output.innerHTML = '<p>Loading...</p>';
 
       try {
-        const libraryData = await fetchWithCORS(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${apiKey}&steamid=${steamId}&include_appinfo=true&include_played_free_games=true`);
+        const libraryResp = await fetch(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${apiKey}&steamid=${steamId}&include_appinfo=true&include_played_free_games=true`);
+        if (!libraryResp.ok) throw new Error(`Steam API error: ${libraryResp.status}`);
+        const libraryData = await libraryResp.json();
         const games = libraryData.response.games;
 
-        games.sort((a, b) => (b.playtime_forever + (b.rtime_last_played || 0)*0.5) - (a.playtime_forever + (a.rtime_last_played || 0)*0.5));
+        games.sort((a, b) => (b.playtime_forever + (b.rtime_last_played || 0) * 0.5) - (a.playtime_forever + (a.rtime_last_played || 0) * 0.5));
 
         output.innerHTML = '<div class="card"><h2>Your Top Weighted Games:</h2><ul>' +
-          games.slice(0, 5).map(g => `<li>${g.name} - ${(g.playtime_forever/60).toFixed(1)} hrs</li>`).join('') + '</ul></div>';
+          games.slice(0, 5).map(g => `<li>${g.name} - ${(g.playtime_forever / 60).toFixed(1)} hrs</li>`).join('') + '</ul></div>';
 
         let topGenres = {};
         for (const game of games.slice(0, 10)) {
-          const appData = await fetchWithCORS(`https://store.steampowered.com/api/appdetails?appids=${game.appid}&cc=${region}`);
+          const appResp = await fetch(`https://store.steampowered.com/api/appdetails?appids=${game.appid}&cc=${region}`);
+          if (!appResp.ok) throw new Error(`AppDetails API error: ${appResp.status}`);
+          const appData = await appResp.json();
           const genres = appData[game.appid]?.data?.genres || [];
           genres.forEach(g => {
             if (!topGenres[g.description]) topGenres[g.description] = 0;
@@ -121,11 +111,13 @@
         }
 
         output.innerHTML += '<div class="card"><h2>Your Top Genres:</h2><ul>' +
-          Object.entries(topGenres).sort((a,b) => b[1]-a[1]).map(([g,c]) => `<li>${g} (${c} games)</li>`).join('') + '</ul></div>';
+          Object.entries(topGenres).sort((a, b) => b[1] - a[1]).map(([g, c]) => `<li>${g} (${c} games)</li>`).join('') + '</ul></div>';
 
         let recommendations = [];
         for (const genre of Object.keys(topGenres)) {
-          const searchData = await fetchWithCORS(`https://store.steampowered.com/api/storesearch/?term=${genre}&cc=${region}&l=english`);
+          const searchResp = await fetch(`https://store.steampowered.com/api/storesearch/?term=${genre}&cc=${region}&l=english`);
+          if (!searchResp.ok) throw new Error(`StoreSearch API error: ${searchResp.status}`);
+          const searchData = await searchResp.json();
           recommendations = recommendations.concat(searchData.items);
         }
 
@@ -134,7 +126,7 @@
           if (!earlyAccess && game.early_access) return false;
           if (!demos && game.type === 'Demo') return false;
           if (onlyOnSale && (!game.price || !game.price.discount_percent)) return false;
-          if (game.review_score/10 < minReviewScore) return false;
+          if (game.review_score / 10 < minReviewScore) return false;
           if (game.review_count < minReviewCount) return false;
           return true;
         });
@@ -161,7 +153,7 @@
 
       } catch (err) {
         console.error(err);
-        output.innerHTML = '<p class="error">Failed to fetch data. Check your API key, SteamID, or network.</p>';
+        output.innerHTML = `<p class="error">${err.message}</p>`;
       }
     }
 
