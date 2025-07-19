@@ -141,7 +141,9 @@
           recommendedGames.push(...filtered.map(g => ({
             name: g.name,
             link: `https://store.steampowered.com/app/${g.id}/`,
-            reason: `Recommended because you like ${genre}`
+            reason: `Recommended because you like ${genre}`,
+            reviewSummary: g.review_score_desc || "No reviews",
+            reviewCount: g.review_count || 0
           })));
         } catch (e) {
           console.warn("Failed to fetch recommended games for genre:", genre);
@@ -153,7 +155,7 @@
       }, []).slice(0, 10);
 
       similarGames.innerHTML = `<strong>Recommended Games Based on Your Genres:</strong><ul>` +
-        uniqueRecommendations.map(g => `<li><a href="${g.link}" target="_blank">${g.name}</a> - ${g.reason}</li>`).join("") +
+        uniqueRecommendations.map(g => `<li><a href="${g.link}" target="_blank">${g.name}</a> - ${g.reason}<br>Reviews: ${g.reviewSummary} (${g.reviewCount} reviews)</li>`).join("") +
         `</ul>`;
       similarGames.style.display = "block";
     }
