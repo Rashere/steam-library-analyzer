@@ -90,7 +90,7 @@
         const data = await response.json();
         lastData = data;
         document.getElementById('downloadBtn').style.display = "inline-block";
-        await showRecommendations(data, apiKey);
+        await showRecommendations(data);
         fetchSimilarGames(data, includeEarlyAccess, includeDemos, excludeOwned, minReviewScore, minReviewCount);
       } catch (err) {
         console.error(err);
@@ -99,7 +99,7 @@
       }
     }
 
-    async function showRecommendations(data, apiKey) {
+    async function showRecommendations(data) {
       const recommendations = document.getElementById('recommendations');
       const topGenres = document.getElementById('topGenres');
       const games = data.response.games;
@@ -115,23 +115,29 @@
 
       let genreCount = {};
       for (let game of weightedGames) {
-        const appId = game.appid;
-        const url = `https://store.steampowered.com/api/appdetails?appids=${appId}`;
         try {
+          const url = `https://store.steampowered.com/api/appdetails?appids=${game.appid}`;
           const response = await fetch(url);
-          const appData = await response.json();
-          const genres = appData[appId].data.genres?.map(g => g.description) || [];
-          genres.forEach(genre => {
-            genreCount[genre] = (genreCount[genre] || 0) + 1;
-          });
+          if (response.ok) {
+            const appData = await response.json();
+            const genres = appData[game.appid].data?.genres?.map(g => g.description) || [];
+            genres.forEach(genre => {
+              genreCount[genre] = (genreCount[genre] || 0) + 1;
+            });
+          }
         } catch (e) {
-          console.warn("Failed to fetch genres for appId:", appId);
+          console.warn("Failed to fetch genres for appId:", game.appid);
         }
       }
       const sortedGenres = Object.entries(genreCount).sort((a, b) => b[1] - a[1]);
-      const genreDetails = sortedGenres.map(([genre, count]) => `<li>${genre} (${count} top games)</li>`).join("");
-      topGenres.innerHTML = `<strong>Your Top Genres:</strong><ul>${genreDetails}</ul>`;
-      topGenres.style.display = "block";
+      if (sortedGenres.length > 0) {
+        const genreDetails = sortedGenres.map(([genre, count]) => `<li>${genre} (${count} top games)</li>`).join("");
+        topGenres.innerHTML = `<strong>Your Top Genres:</strong><ul>${genreDetails}</ul>`;
+        topGenres.style.display = "block";
+      } else {
+        topGenres.innerHTML = "<p class='error'>No genres found for your top games.</p>";
+        topGenres.style.display = "block";
+      }
     }
 
     async function fetchSimilarGames(data, includeEarlyAccess, includeDemos, excludeOwned, minReviewScore, minReviewCount) {
@@ -140,15 +146,16 @@
       const weightedGames = weightedSort(data.response.games).slice(0, 3);
       let suggestions = [];
       for (let game of weightedGames) {
-        const appId = game.appid;
-        const url = `https://store.steampowered.com/api/appdetails?appids=${appId}`;
         try {
+          const url = `https://store.steampowered.com/api/appdetails?appids=${game.appid}`;
           const response = await fetch(url);
-          const appData = await response.json();
-          const genres = appData[appId].data.genres?.map(g => g.description);
-          if (genres) suggestions.push(...genres);
+          if (response.ok) {
+            const appData = await response.json();
+            const genres = appData[game.appid].data?.genres?.map(g => g.description);
+            if (genres) suggestions.push(...genres);
+          }
         } catch (e) {
-          console.warn("Failed to fetch details for appId:", appId);
+          console.warn("Failed to fetch details for appId:", game.appid);
         }
       }
       if (suggestions.length === 0) {
@@ -163,22 +170,24 @@
         try {
           const searchUrl = `https://store.steampowered.com/api/storesearch/?cc=us&l=en&term=${encodeURIComponent(genre)}&page=1`;
           const searchResponse = await fetch(searchUrl);
-          const searchData = await searchResponse.json();
-          const filtered = searchData.items.filter(item => {
-            if (!includeEarlyAccess && item.release_date && item.release_date.early_access) return false;
-            if (!includeDemos && item.type === "Demo") return false;
-            if (excludeOwned && ownedAppIds.has(item.id)) return false;
-            if (item.review_score < minReviewScore * 10) return false;
-            if (item.review_count && item.review_count < minReviewCount) return false;
-            return true;
-          });
-          filtered.sort((a, b) => b.review_score - a.review_score);
-          recommendedGames.push(...filtered.map(g => ({
-            name: g.name,
-            link: `https://store.steampowered.com/app/${g.id}/`,
-            reason: `Recommended because you like ${genre}`,
-            reviewScore: g.review_score ? `${g.review_score}/10` : 'No score'
-          })));
+          if (searchResponse.ok) {
+            const searchData = await searchResponse.json();
+            const filtered = searchData.items.filter(item => {
+              if (!includeEarlyAccess && item.release_date && item.release_date.early_access) return false;
+              if (!includeDemos && item.type === "Demo") return false;
+              if (excludeOwned && ownedAppIds.has(item.id)) return false;
+              if (item.review_score < minReviewScore * 10) return false;
+              if (item.review_count && item.review_count < minReviewCount) return false;
+              return true;
+            });
+            filtered.sort((a, b) => b.review_score - a.review_score);
+            recommendedGames.push(...filtered.map(g => ({
+              name: g.name,
+              link: `https://store.steampowered.com/app/${g.id}/`,
+              reason: `Recommended because you like ${genre}`,
+              reviewScore: g.review_score ? `${g.review_score}/10` : 'No score'
+            })));
+          }
         } catch (e) {
           console.warn("Failed to fetch recommended games for genre:", genre);
         }
