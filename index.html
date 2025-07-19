@@ -11,7 +11,7 @@
     .options label { display: block; margin: 5px 0; }
     .error { color: red; }
     .container { max-width: 600px; margin: auto; text-align: center; }
-    .recommendations, .similar-games { background: #e9f7ef; color: #155724; padding: 10px; margin-top: 15px; border-radius: 5px; }
+    .recommendations, .similar-games, .genres { background: #e9f7ef; color: #155724; padding: 10px; margin-top: 15px; border-radius: 5px; }
   </style>
 </head>
 <body>
@@ -29,6 +29,7 @@
     </div>
     <button onclick="fetchSteamData()">Analyze My Library</button>
     <div id="recommendations" class="recommendations" style="display:none;"></div>
+    <div id="topGenres" class="genres" style="display:none;"></div>
     <div id="similarGames" class="similar-games" style="display:none;"></div>
     <button id="downloadBtn" style="display:none;" onclick="downloadCSV()">Download CSV</button>
   </div>
@@ -64,8 +65,10 @@
       const minReviewScore = parseFloat(document.getElementById('minReviewScore').value) || 0;
       const minReviewCount = parseInt(document.getElementById('minReviewCount').value) || 0;
       const recommendations = document.getElementById('recommendations');
+      const topGenres = document.getElementById('topGenres');
       const similarGames = document.getElementById('similarGames');
       recommendations.style.display = "none";
+      topGenres.style.display = "none";
       similarGames.style.display = "none";
       try {
         const steamID = await resolveSteamID64(steamIDInput, apiKey);
@@ -75,7 +78,7 @@
         const data = await response.json();
         lastData = data;
         document.getElementById('downloadBtn').style.display = "inline-block";
-        showRecommendations(data);
+        await showRecommendations(data, apiKey);
         fetchSimilarGames(data, includeEarlyAccess, includeDemos, excludeOwned, minReviewScore, minReviewCount);
       } catch (err) {
         console.error(err);
@@ -84,20 +87,9 @@
       }
     }
 
-    function weightedSort(games) {
-      const now = Math.floor(Date.now() / 1000);
-      return games.map(game => {
-        const hours = game.playtime_forever / 60;
-        const lastPlayed = game.rtime_last_played ? new Date(game.rtime_last_played * 1000).toLocaleDateString() : "Never";
-        const daysSincePlayed = (now - game.rtime_last_played) / 86400;
-        const recencyWeight = Math.max(1, 30 - daysSincePlayed / 7);
-        const totalWeight = hours * 0.6 + recencyWeight * 0.4;
-        return { ...game, weight: totalWeight, hoursPlayed: hours.toFixed(1), lastPlayed: lastPlayed };
-      }).sort((a, b) => b.weight - a.weight);
-    }
-
-    function showRecommendations(data) {
+    async function showRecommendations(data, apiKey) {
       const recommendations = document.getElementById('recommendations');
+      const topGenres = document.getElementById('topGenres');
       const games = data.response.games;
       if (!games || games.length === 0) {
         recommendations.innerHTML = "No games found to analyze.";
@@ -108,6 +100,26 @@
       const details = weightedGames.map(g => `<li>${g.name} - ${g.hoursPlayed} hrs, Last Played: ${g.lastPlayed}</li>`).join("");
       recommendations.innerHTML = `<strong>Your Top Weighted Games:</strong><ul>${details}</ul>`;
       recommendations.style.display = "block";
+
+      let genreCount = {};
+      for (let game of weightedGames) {
+        const appId = game.appid;
+        const url = `https://store.steampowered.com/api/appdetails?appids=${appId}`;
+        try {
+          const response = await fetch(url);
+          const appData = await response.json();
+          const genres = appData[appId].data.genres?.map(g => g.description) || [];
+          genres.forEach(genre => {
+            genreCount[genre] = (genreCount[genre] || 0) + 1;
+          });
+        } catch (e) {
+          console.warn("Failed to fetch genres for appId:", appId);
+        }
+      }
+      const sortedGenres = Object.entries(genreCount).sort((a, b) => b[1] - a[1]);
+      const genreDetails = sortedGenres.map(([genre, count]) => `<li>${genre} (${count} top games)</li>`).join("");
+      topGenres.innerHTML = `<strong>Your Top Genres:</strong><ul>${genreDetails}</ul>`;
+      topGenres.style.display = "block";
     }
 
     async function fetchSimilarGames(data, includeEarlyAccess, includeDemos, excludeOwned, minReviewScore, minReviewCount) {
