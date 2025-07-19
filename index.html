@@ -72,12 +72,17 @@
     }
 
     async function fetchWithCORS(url) {
-      const proxyUrl = 'https://cors.bridged.cc/';
-      const response = await fetch(proxyUrl + url, {
-        headers: { 'x-cors-grida-api-key': 'tryout' }
-      });
-      if (!response.ok) throw new Error(`Network error: ${response.status}`);
-      return response.json();
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Network error: ${response.status}`);
+        return response.json();
+      } catch (e) {
+        console.error("Direct fetch failed, trying CORS proxy...");
+        const proxyUrl = 'https://api.allorigins.win/raw?url=';
+        const proxiedResponse = await fetch(proxyUrl + encodeURIComponent(url));
+        if (!proxiedResponse.ok) throw new Error(`CORS proxy failed: ${proxiedResponse.status}`);
+        return proxiedResponse.json();
+      }
     }
 
     async function analyzeLibrary() {
