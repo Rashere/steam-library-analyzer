@@ -34,10 +34,10 @@
   <div class="container">
     <h1>🎮 Steam Library Analyzer</h1>
     
-    <label>Steam API Key:</label>
-    <input type="text" id="apiKey" placeholder="Enter your Steam API key">
     <label>SteamID64 or Profile URL:</label>
     <input type="text" id="steamId" placeholder="Enter SteamID64 or Profile URL">
+    <label>Steam API Key:</label>
+    <input type="text" id="apiKey" placeholder="Enter your Steam API key">
     <label>Region:</label>
     <select id="region">
       <option value="us">US</option>
@@ -72,10 +72,8 @@
     }
 
     async function fetchWithCORS(url) {
-      const proxyUrl = 'https://cors.bridged.cc/';
-      const response = await fetch(proxyUrl + url, {
-        headers: { 'x-cors-grida-api-key': 'tryout' }
-      });
+      const proxyUrl = 'https://api.allorigins.win/raw?url=';
+      const response = await fetch(proxyUrl + encodeURIComponent(url));
       if (!response.ok) throw new Error(`Network error: ${response.status}`);
       return response.json();
     }
