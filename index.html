@@ -21,6 +21,7 @@
     <input id="apiKey" placeholder="Steam API Key" />
     <label><input type="checkbox" id="includeEarlyAccess" checked /> Include Early Access games</label>
     <label><input type="checkbox" id="includeDemos" checked /> Include Demos</label>
+    <label><input type="checkbox" id="excludeOwned" /> Exclude games I already own</label>
     <button onclick="fetchSteamData()">Analyze My Library</button>
     <div id="recommendations" class="recommendations" style="display:none;"></div>
     <div id="similarGames" class="similar-games" style="display:none;"></div>
@@ -28,6 +29,13 @@
   </div>
   <script>
     let lastData = null;
+
+    window.onload = function() {
+      const savedSteamID = localStorage.getItem('steamID');
+      const savedApiKey = localStorage.getItem('apiKey');
+      if (savedSteamID) document.getElementById('steamID').value = savedSteamID;
+      if (savedApiKey) document.getElementById('apiKey').value = savedApiKey;
+    };
 
     async function resolveSteamID64(input, apiKey) {
       if (/^\d{17}$/.test(input)) return input;
@@ -43,8 +51,11 @@
     async function fetchSteamData() {
       const steamIDInput = document.getElementById('steamID').value.trim();
       const apiKey = document.getElementById('apiKey').value.trim();
+      localStorage.setItem('steamID', steamIDInput);
+      localStorage.setItem('apiKey', apiKey);
       const includeEarlyAccess = document.getElementById('includeEarlyAccess').checked;
       const includeDemos = document.getElementById('includeDemos').checked;
+      const excludeOwned = document.getElementById('excludeOwned').checked;
       const recommendations = document.getElementById('recommendations');
       const similarGames = document.getElementById('similarGames');
       recommendations.style.display = "none";
@@ -58,7 +69,7 @@
         lastData = data;
         document.getElementById('downloadBtn').style.display = "inline-block";
         showRecommendations(data);
-        fetchSimilarGames(data, includeEarlyAccess, includeDemos);
+        fetchSimilarGames(data, includeEarlyAccess, includeDemos, excludeOwned);
       } catch (err) {
         console.error(err);
         recommendations.innerHTML = `<p class="error">${err.message}</p>`;
@@ -80,8 +91,9 @@
       recommendations.style.display = "block";
     }
 
-    async function fetchSimilarGames(data, includeEarlyAccess, includeDemos) {
+    async function fetchSimilarGames(data, includeEarlyAccess, includeDemos, excludeOwned) {
       const similarGames = document.getElementById('similarGames');
+      const ownedAppIds = new Set(data.response.games.map(g => g.appid));
       const recentGames = data.response.games.sort((a, b) => b.rtime_last_played - a.rtime_last_played).slice(0, 3);
       let suggestions = [];
       for (let game of recentGames) {
@@ -112,6 +124,7 @@
           const filtered = searchData.items.filter(item => {
             if (!includeEarlyAccess && item.release_date && item.release_date.early_access) return false;
             if (!includeDemos && item.type === "Demo") return false;
+            if (excludeOwned && ownedAppIds.has(item.id)) return false;
             return true;
           });
           recommendedGames.push(...filtered.map(g => ({
