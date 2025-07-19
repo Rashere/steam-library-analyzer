@@ -144,7 +144,7 @@
         }
 
         recommendations = recommendations.filter(game => {
-          if (game.type && game.type.toLowerCase() !== 'game') return false; // exclude non-games
+          if (!game.type || !game.type.toLowerCase().includes('game')) return false; // exclude non-games more reliably
           const ownedGame = games.find(g => g.appid === game.id);
           if (ownedGame) {
             const lastPlayed = ownedGame.rtime_last_played || 0;
