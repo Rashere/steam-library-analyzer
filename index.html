@@ -91,7 +91,7 @@
         lastData = data;
         document.getElementById('downloadBtn').style.display = "inline-block";
         await showRecommendations(data);
-        fetchSimilarGames(data, includeEarlyAccess, includeDemos, excludeOwned, minReviewScore, minReviewCount);
+        await fetchSimilarGames(data, includeEarlyAccess, includeDemos, excludeOwned, minReviewScore, minReviewCount);
       } catch (err) {
         console.error(err);
         recommendations.innerHTML = `<p class="error">${err.message}</p>`;
@@ -116,7 +116,8 @@
       let genreCount = {};
       for (let game of weightedGames) {
         try {
-          const url = `https://store.steampowered.com/api/appdetails?appids=${game.appid}`;
+          const proxyUrl = `https://api.allorigins.win/raw?url=`;
+          const url = `${proxyUrl}${encodeURIComponent(`https://store.steampowered.com/api/appdetails?appids=${game.appid}`)}`;
           const response = await fetch(url);
           if (response.ok) {
             const appData = await response.json();
@@ -147,7 +148,8 @@
       let suggestions = [];
       for (let game of weightedGames) {
         try {
-          const url = `https://store.steampowered.com/api/appdetails?appids=${game.appid}`;
+          const proxyUrl = `https://api.allorigins.win/raw?url=`;
+          const url = `${proxyUrl}${encodeURIComponent(`https://store.steampowered.com/api/appdetails?appids=${game.appid}`)}`;
           const response = await fetch(url);
           if (response.ok) {
             const appData = await response.json();
@@ -168,7 +170,8 @@
       let recommendedGames = [];
       for (let genre of uniqueGenres) {
         try {
-          const searchUrl = `https://store.steampowered.com/api/storesearch/?cc=us&l=en&term=${encodeURIComponent(genre)}&page=1`;
+          const proxyUrl = `https://api.allorigins.win/raw?url=`;
+          const searchUrl = `${proxyUrl}${encodeURIComponent(`https://store.steampowered.com/api/storesearch/?cc=us&l=en&term=${encodeURIComponent(genre)}&page=1`)}`;
           const searchResponse = await fetch(searchUrl);
           if (searchResponse.ok) {
             const searchData = await searchResponse.json();
