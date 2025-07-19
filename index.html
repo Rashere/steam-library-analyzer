@@ -7,7 +7,8 @@
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; background-color: #f8f9fa; }
     input, button { padding: 10px; margin: 8px 0; width: 100%; max-width: 500px; }
-    label { display: block; margin-top: 10px; }
+    .options { text-align: left; margin-top: 10px; }
+    .options label { display: block; margin: 5px 0; }
     .error { color: red; }
     .container { max-width: 600px; margin: auto; text-align: center; }
     .recommendations, .similar-games { background: #e9f7ef; color: #155724; padding: 10px; margin-top: 15px; border-radius: 5px; }
@@ -19,9 +20,13 @@
     <p>Enter your SteamID64 or Profile URL and Steam API Key to analyze your library and get recommendations prioritized by positive reviews.</p>
     <input id="steamID" placeholder="SteamID64 or Profile URL" />
     <input id="apiKey" placeholder="Steam API Key" />
-    <label><input type="checkbox" id="includeEarlyAccess" checked /> Include Early Access games</label>
-    <label><input type="checkbox" id="includeDemos" checked /> Include Demos</label>
-    <label><input type="checkbox" id="excludeOwned" /> Exclude games I already own</label>
+    <div class="options">
+      <label><input type="checkbox" id="includeEarlyAccess" checked /> Include Early Access games</label>
+      <label><input type="checkbox" id="includeDemos" checked /> Include Demos</label>
+      <label><input type="checkbox" id="excludeOwned" /> Exclude games I already own</label>
+      <label><input type="number" id="minReviewScore" placeholder="Min Review Score (0-10)" min="0" max="10" step="0.1" /></label>
+      <label><input type="number" id="minReviewCount" placeholder="Min Review Count" min="0" step="1" /></label>
+    </div>
     <button onclick="fetchSteamData()">Analyze My Library</button>
     <div id="recommendations" class="recommendations" style="display:none;"></div>
     <div id="similarGames" class="similar-games" style="display:none;"></div>
@@ -56,6 +61,8 @@
       const includeEarlyAccess = document.getElementById('includeEarlyAccess').checked;
       const includeDemos = document.getElementById('includeDemos').checked;
       const excludeOwned = document.getElementById('excludeOwned').checked;
+      const minReviewScore = parseFloat(document.getElementById('minReviewScore').value) || 0;
+      const minReviewCount = parseInt(document.getElementById('minReviewCount').value) || 0;
       const recommendations = document.getElementById('recommendations');
       const similarGames = document.getElementById('similarGames');
       recommendations.style.display = "none";
@@ -69,7 +76,7 @@
         lastData = data;
         document.getElementById('downloadBtn').style.display = "inline-block";
         showRecommendations(data);
-        fetchSimilarGames(data, includeEarlyAccess, includeDemos, excludeOwned);
+        fetchSimilarGames(data, includeEarlyAccess, includeDemos, excludeOwned, minReviewScore, minReviewCount);
       } catch (err) {
         console.error(err);
         recommendations.innerHTML = `<p class="error">${err.message}</p>`;
@@ -103,7 +110,7 @@
       recommendations.style.display = "block";
     }
 
-    async function fetchSimilarGames(data, includeEarlyAccess, includeDemos, excludeOwned) {
+    async function fetchSimilarGames(data, includeEarlyAccess, includeDemos, excludeOwned, minReviewScore, minReviewCount) {
       const similarGames = document.getElementById('similarGames');
       const ownedAppIds = new Set(data.response.games.map(g => g.appid));
       const weightedGames = weightedSort(data.response.games).slice(0, 3);
@@ -137,6 +144,8 @@
             if (!includeEarlyAccess && item.release_date && item.release_date.early_access) return false;
             if (!includeDemos && item.type === "Demo") return false;
             if (excludeOwned && ownedAppIds.has(item.id)) return false;
+            if (item.review_score < minReviewScore * 10) return false;
+            if (item.review_count && item.review_count < minReviewCount) return false;
             return true;
           });
           filtered.sort((a, b) => b.review_score - a.review_score);
