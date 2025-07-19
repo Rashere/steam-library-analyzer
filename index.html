@@ -26,6 +26,7 @@
     .discount-high { color: #4caf50; }
     .discount-medium { color: #ff9800; }
     .discount-none { color: #f5f5f5; }
+    .reason { color: #ccc; font-size: 0.95rem; margin-top: 8px; display: block; }
     .error { color: #f44336; margin-top: 10px; }
     h2 { border-bottom: 1px solid #333; padding-bottom: 5px; margin-top: 25px; }
   </style>
@@ -46,6 +47,8 @@
       <option value="jp">JP</option>
     </select>
     <label><input type="checkbox" id="excludeOwned"> Exclude games I already own</label>
+    <label>Include owned games if not played in (years):</label>
+    <input type="number" id="includeOwnedAfterYears" placeholder="e.g. 2" min="0">
     <label><input type="checkbox" id="earlyAccess"> Include Early Access</label>
     <label><input type="checkbox" id="demos"> Include Demos</label>
     <label><input type="checkbox" id="onlyOnSale"> Show Only Games on Sale</label>
@@ -98,6 +101,7 @@
       localStorage.setItem('steamId', steamId);
       const region = document.getElementById('region').value;
       const excludeOwned = document.getElementById('excludeOwned').checked;
+      const includeOwnedAfterYears = parseFloat(document.getElementById('includeOwnedAfterYears').value) || 0;
       const earlyAccess = document.getElementById('earlyAccess').checked;
       const demos = document.getElementById('demos').checked;
       const onlyOnSale = document.getElementById('onlyOnSale').checked;
@@ -112,6 +116,8 @@
         console.log('Fetching:', libraryURL);
         const libraryData = await fetchJSON(libraryURL);
         const games = libraryData.response.games;
+        const now = Math.floor(Date.now() / 1000);
+        const cutoffSeconds = includeOwnedAfterYears * 365 * 24 * 60 * 60;
 
         games.sort((a, b) => (b.playtime_forever + (b.rtime_last_played || 0) * 0.5) - (a.playtime_forever + (a.rtime_last_played || 0) * 0.5));
 
@@ -138,7 +144,13 @@
         }
 
         recommendations = recommendations.filter(game => {
-          if (excludeOwned && games.find(g => g.appid === game.id)) return false;
+          const ownedGame = games.find(g => g.appid === game.id);
+          if (ownedGame) {
+            const lastPlayed = ownedGame.rtime_last_played || 0;
+            if (excludeOwned) return false;
+            if (includeOwnedAfterYears > 0 && (lastPlayed > 0 && (now - lastPlayed) < cutoffSeconds)) return false;
+            if (includeOwnedAfterYears > 0 && ownedGame.playtime_forever > 0 && (now - lastPlayed) < cutoffSeconds) return false;
+          }
           if (!earlyAccess && game.early_access) return false;
           if (!demos && game.type === 'Demo') return false;
           if (onlyOnSale && (!game.price || !game.price.discount_percent)) return false;
@@ -160,10 +172,12 @@
           const discount = game.price?.discount_percent || 0;
           const discountClass = discount >= 50 ? 'discount-high' : discount >= 25 ? 'discount-medium' : 'discount-none';
           const review = game.review_score ? `${game.review_score}/10 (${game.review_count} reviews)` : 'No review data';
+          const reason = `Recommended because it matches your top genre(s), has ${review}, and a current price of ${price}.`;
           output.innerHTML += `<div class="card">
             <a href="https://store.steampowered.com/app/${game.id}" target="_blank">${game.name}</a><br>
             <span>${review}</span><br>
             <span class="price ${discountClass}">${origPrice ? `${origPrice} → ` : ''}${price} ${discount ? `(-${discount}%)` : ''}</span>
+            <span class="reason">${reason}</span>
           </div>`;
         });
 
