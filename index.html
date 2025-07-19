@@ -140,11 +140,12 @@
         let recommendations = [];
         for (const genre of Object.keys(topGenres)) {
           const searchData = await fetchJSON(`https://store.steampowered.com/api/storesearch/?term=${genre}&cc=${region}&l=english`);
-          recommendations = recommendations.concat(searchData.items);
+          if (searchData.items) {
+            recommendations = recommendations.concat(searchData.items.filter(item => item.type === 'game'));
+          }
         }
 
         recommendations = recommendations.filter(game => {
-          if (!game.type || !game.type.toLowerCase().includes('game')) return false; // exclude non-games more reliably
           const ownedGame = games.find(g => g.appid === game.id);
           if (ownedGame) {
             const lastPlayed = ownedGame.rtime_last_played || 0;
