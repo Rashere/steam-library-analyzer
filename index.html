@@ -1,231 +1,139 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Steam Library Analyzer</title>
   <style>
-    body { font-family: Arial, sans-serif; padding: 20px; background-color: #f8f9fa; }
-    input, button { padding: 10px; margin: 8px 0; width: 100%; max-width: 500px; }
-    .options { text-align: left; margin-top: 10px; }
-    .options label { display: block; margin: 5px 0; }
+    body { font-family: Arial, sans-serif; background-color: #f8f9fa; margin: 20px; }
+    h1 { color: #333; }
+    label { display: block; margin: 8px 0; }
+    input, select, button { margin: 5px 0; padding: 8px; width: 100%; max-width: 500px; }
+    .recommendation, .top-genres, .top-games { background: #fff; margin: 10px 0; padding: 10px; border-radius: 5px; }
+    .price { font-weight: bold; }
+    .discount-high { color: green; }
+    .discount-medium { color: orange; }
+    .discount-none { color: #555; }
     .error { color: red; }
-    .container { max-width: 600px; margin: auto; text-align: center; }
-    .recommendations, .similar-games, .genres { background: #e9f7ef; color: #155724; padding: 10px; margin-top: 15px; border-radius: 5px; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>🎮 Steam Library Analyzer</h1>
-    <p>Enter your SteamID64 or Profile URL and Steam API Key to analyze your library and get recommendations prioritized by positive reviews.</p>
-    <input id="steamID" placeholder="SteamID64 or Profile URL" />
-    <input id="apiKey" placeholder="Steam API Key" />
-    <div class="options">
-      <label><input type="checkbox" id="includeEarlyAccess" checked /> Include Early Access games</label>
-      <label><input type="checkbox" id="includeDemos" checked /> Include Demos</label>
-      <label><input type="checkbox" id="excludeOwned" /> Exclude games I already own</label>
-      <label><input type="number" id="minReviewScore" placeholder="Min Review Score (0-10)" min="0" max="10" step="0.1" /></label>
-      <label><input type="number" id="minReviewCount" placeholder="Min Review Count" min="0" step="1" /></label>
-    </div>
-    <button onclick="fetchSteamData()">Analyze My Library</button>
-    <div id="recommendations" class="recommendations" style="display:none;"></div>
-    <div id="topGenres" class="genres" style="display:none;"></div>
-    <div id="similarGames" class="similar-games" style="display:none;"></div>
-    <button id="downloadBtn" style="display:none;" onclick="downloadCSV()">Download CSV</button>
-  </div>
+  <h1>🎮 Steam Library Analyzer</h1>
+  
+  <label>Steam API Key:<input type="text" id="apiKey"></label>
+  <label>SteamID64 or Profile URL:<input type="text" id="steamId"></label>
+  <label>
+    Region:
+    <select id="region">
+      <option value="us">US</option>
+      <option value="eu">EU</option>
+      <option value="uk">UK</option>
+      <option value="jp">JP</option>
+    </select>
+  </label>
+  <label><input type="checkbox" id="excludeOwned"> Exclude games I already own</label>
+  <label><input type="checkbox" id="earlyAccess"> Include Early Access</label>
+  <label><input type="checkbox" id="demos"> Include Demos</label>
+  <label><input type="checkbox" id="onlyOnSale"> Show Only Games on Sale</label>
+  <label><input type="number" id="minReviewScore" placeholder="Min Review Score (0-10)"></label>
+  <label><input type="number" id="minReviewCount" placeholder="Min Review Count"></label>
+  <label>
+    Sort by:
+    <select id="sortBy">
+      <option value="default">Default</option>
+      <option value="price">Price (Low → High)</option>
+      <option value="discount">Biggest Discount</option>
+    </select>
+  </label>
+  <button onclick="analyzeLibrary()">Analyze</button>
+  <button onclick="downloadCSV()">Download CSV</button>
+
+  <div id="output"></div>
+
   <script>
-    let lastData = null;
-
-    window.onload = function() {
-      const savedSteamID = localStorage.getItem('steamID');
-      const savedApiKey = localStorage.getItem('apiKey');
-      if (savedSteamID) document.getElementById('steamID').value = savedSteamID;
-      if (savedApiKey) document.getElementById('apiKey').value = savedApiKey;
-    };
-
-    function weightedSort(games) {
-      const now = Math.floor(Date.now() / 1000);
-      return games.map(game => {
-        const hours = game.playtime_forever / 60;
-        const lastPlayed = game.rtime_last_played ? new Date(game.rtime_last_played * 1000).toLocaleDateString() : "Never";
-        const daysSincePlayed = (now - game.rtime_last_played) / 86400;
-        const recencyWeight = Math.max(1, 30 - daysSincePlayed / 7);
-        const totalWeight = hours * 0.6 + recencyWeight * 0.4;
-        return { ...game, weight: totalWeight, hoursPlayed: hours.toFixed(1), lastPlayed: lastPlayed };
-      }).sort((a, b) => b.weight - a.weight);
-    }
-
-    async function resolveSteamID64(input, apiKey) {
-      if (/^\d{17}$/.test(input)) return input;
-      const vanityUrl = input.replace("https://steamcommunity.com/id/", "").replace(/\/$/, "");
-      const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=${apiKey}&vanityurl=${vanityUrl}`)}`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`Steam API error: ${response.status}`);
-      const data = await response.json();
-      if (data.response.success === 1) return data.response.steamid;
-      throw new Error("Failed to resolve vanity URL. Check your Profile URL and API Key.");
-    }
-
-    async function fetchSteamData() {
-      const steamIDInput = document.getElementById('steamID').value.trim();
+    async function analyzeLibrary() {
       const apiKey = document.getElementById('apiKey').value.trim();
-      localStorage.setItem('steamID', steamIDInput);
-      localStorage.setItem('apiKey', apiKey);
-      const includeEarlyAccess = document.getElementById('includeEarlyAccess').checked;
-      const includeDemos = document.getElementById('includeDemos').checked;
+      const steamId = document.getElementById('steamId').value.trim();
+      const region = document.getElementById('region').value;
       const excludeOwned = document.getElementById('excludeOwned').checked;
+      const earlyAccess = document.getElementById('earlyAccess').checked;
+      const demos = document.getElementById('demos').checked;
+      const onlyOnSale = document.getElementById('onlyOnSale').checked;
       const minReviewScore = parseFloat(document.getElementById('minReviewScore').value) || 0;
       const minReviewCount = parseInt(document.getElementById('minReviewCount').value) || 0;
-      const recommendations = document.getElementById('recommendations');
-      const topGenres = document.getElementById('topGenres');
-      const similarGames = document.getElementById('similarGames');
-      recommendations.style.display = "none";
-      topGenres.style.display = "none";
-      similarGames.style.display = "none";
+      const sortBy = document.getElementById('sortBy').value;
+      const output = document.getElementById('output');
+      output.innerHTML = '<p>Loading...</p>';
+
       try {
-        const steamID = await resolveSteamID64(steamIDInput, apiKey);
-        const gamesURL = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${apiKey}&steamid=${steamID}&include_appinfo=true&format=json`)}`;
-        const response = await fetch(gamesURL);
-        if (!response.ok) throw new Error(`Steam API error: ${response.status}`);
-        const data = await response.json();
-        lastData = data;
-        document.getElementById('downloadBtn').style.display = "inline-block";
-        await showRecommendations(data);
-        await fetchSimilarGames(data, includeEarlyAccess, includeDemos, excludeOwned, minReviewScore, minReviewCount);
+        const libraryResp = await fetch(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${apiKey}&steamid=${steamId}&include_appinfo=true&include_played_free_games=true`);
+        const libraryData = await libraryResp.json();
+        const games = libraryData.response.games;
+
+        games.sort((a, b) => (b.playtime_forever + (b.rtime_last_played || 0)*0.5) - (a.playtime_forever + (a.rtime_last_played || 0)*0.5));
+
+        output.innerHTML = '<div class="top-games"><h2>Your Top Weighted Games:</h2><ul>' +
+          games.slice(0, 5).map(g => `<li>${g.name} - ${(g.playtime_forever/60).toFixed(1)} hrs</li>`).join('') + '</ul></div>';
+
+        let topGenres = {};
+        for (const game of games.slice(0, 10)) {
+          const appResp = await fetch(`https://store.steampowered.com/api/appdetails?appids=${game.appid}&cc=${region}`);
+          const appData = await appResp.json();
+          const genres = appData[game.appid]?.data?.genres || [];
+          genres.forEach(g => {
+            if (!topGenres[g.description]) topGenres[g.description] = 0;
+            topGenres[g.description]++;
+          });
+        }
+
+        output.innerHTML += '<div class="top-genres"><h2>Your Top Genres:</h2><ul>' +
+          Object.entries(topGenres).sort((a,b) => b[1]-a[1]).map(([g,c]) => `<li>${g} (${c} games)</li>`).join('') + '</ul></div>';
+
+        let recommendations = [];
+        for (const genre of Object.keys(topGenres)) {
+          const searchResp = await fetch(`https://store.steampowered.com/api/storesearch/?term=${genre}&cc=${region}&l=english`);
+          const searchData = await searchResp.json();
+          recommendations = recommendations.concat(searchData.items);
+        }
+
+        recommendations = recommendations.filter(game => {
+          if (excludeOwned && games.find(g => g.appid === game.id)) return false;
+          if (!earlyAccess && game.early_access) return false;
+          if (!demos && game.type === 'Demo') return false;
+          if (onlyOnSale && (!game.price || !game.price.discount_percent)) return false;
+          if (game.review_score/10 < minReviewScore) return false;
+          if (game.review_count < minReviewCount) return false;
+          return true;
+        });
+
+        if (sortBy === 'price') {
+          recommendations.sort((a, b) => (a.price?.final || 9999) - (b.price?.final || 9999));
+        } else if (sortBy === 'discount') {
+          recommendations.sort((a, b) => (b.price?.discount_percent || 0) - (a.price?.discount_percent || 0));
+        }
+
+        output.innerHTML += '<h2>Recommended Games:</h2>';
+        recommendations.forEach(game => {
+          const price = game.price ? `$${(game.price.final / 100).toFixed(2)}` : 'Free';
+          const origPrice = game.price?.initial ? `$${(game.price.initial / 100).toFixed(2)}` : '';
+          const discount = game.price?.discount_percent || 0;
+          const discountClass = discount >= 50 ? 'discount-high' : discount >= 25 ? 'discount-medium' : 'discount-none';
+          const review = game.review_score ? `${game.review_score}/10 (${game.review_count} reviews)` : 'No review data';
+          output.innerHTML += `<div class="recommendation">
+            <a href="https://store.steampowered.com/app/${game.id}" target="_blank">${game.name}</a><br>
+            <span>${review}</span><br>
+            <span class="price ${discountClass}">${origPrice ? `${origPrice} → ` : ''}${price} ${discount ? `(-${discount}%)` : ''}</span>
+          </div>`;
+        });
+
       } catch (err) {
         console.error(err);
-        recommendations.innerHTML = `<p class="error">${err.message}</p>`;
-        recommendations.style.display = "block";
+        output.innerHTML = '<p class="error">Failed to fetch data. Check your API key, SteamID, or network.</p>';
       }
-    }
-
-    async function showRecommendations(data) {
-      const recommendations = document.getElementById('recommendations');
-      const topGenres = document.getElementById('topGenres');
-      const games = data.response.games;
-      if (!games || games.length === 0) {
-        recommendations.innerHTML = "No games found to analyze.";
-        recommendations.style.display = "block";
-        return;
-      }
-      const weightedGames = weightedSort(games).slice(0, 5);
-      const details = weightedGames.map(g => `<li>${g.name} - ${g.hoursPlayed} hrs, Last Played: ${g.lastPlayed}</li>`).join("");
-      recommendations.innerHTML = `<strong>Your Top Weighted Games:</strong><ul>${details}</ul>`;
-      recommendations.style.display = "block";
-
-      let genreCount = {};
-      for (let game of weightedGames) {
-        try {
-          const proxyUrl = `https://api.allorigins.win/raw?url=`;
-          const url = `${proxyUrl}${encodeURIComponent(`https://store.steampowered.com/api/appdetails?appids=${game.appid}`)}`;
-          const response = await fetch(url);
-          if (response.ok) {
-            const appData = await response.json();
-            const genres = appData[game.appid].data?.genres?.map(g => g.description) || [];
-            genres.forEach(genre => {
-              genreCount[genre] = (genreCount[genre] || 0) + 1;
-            });
-          }
-        } catch (e) {
-          console.warn("Failed to fetch genres for appId:", game.appid);
-        }
-      }
-      const sortedGenres = Object.entries(genreCount).sort((a, b) => b[1] - a[1]);
-      if (sortedGenres.length > 0) {
-        const genreDetails = sortedGenres.map(([genre, count]) => `<li>${genre} (${count} top games)</li>`).join("");
-        topGenres.innerHTML = `<strong>Your Top Genres:</strong><ul>${genreDetails}</ul>`;
-        topGenres.style.display = "block";
-      } else {
-        topGenres.innerHTML = "<p class='error'>No genres found for your top games.</p>";
-        topGenres.style.display = "block";
-      }
-    }
-
-    async function fetchSimilarGames(data, includeEarlyAccess, includeDemos, excludeOwned, minReviewScore, minReviewCount) {
-      const similarGames = document.getElementById('similarGames');
-      const ownedAppIds = new Set(data.response.games.map(g => g.appid));
-      const weightedGames = weightedSort(data.response.games).slice(0, 3);
-      let suggestions = [];
-      for (let game of weightedGames) {
-        try {
-          const proxyUrl = `https://api.allorigins.win/raw?url=`;
-          const url = `${proxyUrl}${encodeURIComponent(`https://store.steampowered.com/api/appdetails?appids=${game.appid}`)}`;
-          const response = await fetch(url);
-          if (response.ok) {
-            const appData = await response.json();
-            const genres = appData[game.appid].data?.genres?.map(g => g.description);
-            if (genres) suggestions.push(...genres);
-          }
-        } catch (e) {
-          console.warn("Failed to fetch details for appId:", game.appid);
-        }
-      }
-      if (suggestions.length === 0) {
-        similarGames.innerHTML = "Couldn’t fetch genres for recommendations.";
-        similarGames.style.display = "block";
-        return;
-      }
-      const uniqueGenres = [...new Set(suggestions)];
-
-      let recommendedGames = [];
-      for (let genre of uniqueGenres) {
-        try {
-          const proxyUrl = `https://api.allorigins.win/raw?url=`;
-          const searchUrl = `${proxyUrl}${encodeURIComponent(`https://store.steampowered.com/api/storesearch/?cc=us&l=en&term=${encodeURIComponent(genre)}&page=1`)}`;
-          const searchResponse = await fetch(searchUrl);
-          if (searchResponse.ok) {
-            const searchData = await searchResponse.json();
-            const filtered = searchData.items.filter(item => {
-              if (!includeEarlyAccess && item.release_date && item.release_date.early_access) return false;
-              if (!includeDemos && item.type === "Demo") return false;
-              if (excludeOwned && ownedAppIds.has(item.id)) return false;
-              if (item.review_score < minReviewScore * 10) return false;
-              if (item.review_count && item.review_count < minReviewCount) return false;
-              return true;
-            });
-            filtered.sort((a, b) => b.review_score - a.review_score);
-            recommendedGames.push(...filtered.map(g => ({
-              name: g.name,
-              link: `https://store.steampowered.com/app/${g.id}/`,
-              reason: `Recommended because you like ${genre}`,
-              reviewScore: g.review_score ? `${g.review_score}/10` : 'No score'
-            })));
-          }
-        } catch (e) {
-          console.warn("Failed to fetch recommended games for genre:", genre);
-        }
-      }
-      const uniqueRecommendations = recommendedGames.reduce((acc, curr) => {
-        if (!acc.find(g => g.name === curr.name)) acc.push(curr);
-        return acc;
-      }, []).slice(0, 10);
-
-      similarGames.innerHTML = `<strong>Recommended Games Based on Your Genres:</strong><ul>` +
-        uniqueRecommendations.map(g => `<li><a href="${g.link}" target="_blank">${g.name}</a> - ${g.reason}<br>Review Score: ${g.reviewScore}</li>`).join("") +
-        `</ul>`;
-      similarGames.style.display = "block";
     }
 
     function downloadCSV() {
-      if (!lastData || !lastData.response || !lastData.response.games) {
-        alert("No game data available to export.");
-        return;
-      }
-      const games = lastData.response.games;
-      const headers = ["AppID", "Name", "Playtime (Hours)"];
-      const rows = games.map(game => [
-        game.appid,
-        game.name.replace(/"/g, '""'),
-        (game.playtime_forever / 60).toFixed(2)
-      ]);
-      let csvContent = "data:text/csv;charset=utf-8," + headers.join(",") + "\n" + rows.map(r => r.join(",")).join("\n");
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", "steam_library.csv");
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      alert("CSV export for recommendations coming soon.");
     }
   </script>
 </body>
