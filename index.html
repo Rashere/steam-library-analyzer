@@ -71,6 +71,16 @@
       document.getElementById('steamId').value = localStorage.getItem('steamId') || '';
     }
 
+    async function fetchJSON(url) {
+      const response = await fetch(url);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`Error fetching ${url}:`, errorText);
+        throw new Error(`Fetch failed: ${response.status} ${response.statusText}`);
+      }
+      return response.json();
+    }
+
     async function analyzeLibrary() {
       const apiKey = document.getElementById('apiKey').value.trim();
       const steamId = document.getElementById('steamId').value.trim();
@@ -88,9 +98,7 @@
       output.innerHTML = '<p>Loading...</p>';
 
       try {
-        const libraryResp = await fetch(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${apiKey}&steamid=${steamId}&include_appinfo=true&include_played_free_games=true`);
-        if (!libraryResp.ok) throw new Error(`Steam API error: ${libraryResp.status}`);
-        const libraryData = await libraryResp.json();
+        const libraryData = await fetchJSON(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${apiKey}&steamid=${steamId}&include_appinfo=true&include_played_free_games=true`);
         const games = libraryData.response.games;
 
         games.sort((a, b) => (b.playtime_forever + (b.rtime_last_played || 0) * 0.5) - (a.playtime_forever + (a.rtime_last_played || 0) * 0.5));
@@ -100,9 +108,7 @@
 
         let topGenres = {};
         for (const game of games.slice(0, 10)) {
-          const appResp = await fetch(`https://store.steampowered.com/api/appdetails?appids=${game.appid}&cc=${region}`);
-          if (!appResp.ok) throw new Error(`AppDetails API error: ${appResp.status}`);
-          const appData = await appResp.json();
+          const appData = await fetchJSON(`https://store.steampowered.com/api/appdetails?appids=${game.appid}&cc=${region}`);
           const genres = appData[game.appid]?.data?.genres || [];
           genres.forEach(g => {
             if (!topGenres[g.description]) topGenres[g.description] = 0;
@@ -115,9 +121,7 @@
 
         let recommendations = [];
         for (const genre of Object.keys(topGenres)) {
-          const searchResp = await fetch(`https://store.steampowered.com/api/storesearch/?term=${genre}&cc=${region}&l=english`);
-          if (!searchResp.ok) throw new Error(`StoreSearch API error: ${searchResp.status}`);
-          const searchData = await searchResp.json();
+          const searchData = await fetchJSON(`https://store.steampowered.com/api/storesearch/?term=${genre}&cc=${region}&l=english`);
           recommendations = recommendations.concat(searchData.items);
         }
 
