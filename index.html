@@ -48,21 +48,6 @@
       throw new Error("Failed to resolve vanity URL. Check your Profile URL and API Key.");
     }
 
-    async function fetchSteamSpyData(appid) {
-      const url = `https://cors.bridged.cc/http://steamspy.com/api.php?request=appdetails&appid=${appid}`;
-      const response = await fetch(url);
-      if (!response.ok) {
-        console.warn("SteamSpy API failed for appid:", appid);
-        return { positive: 'N/A', negative: 'N/A', owners: 'N/A' };
-      }
-      const data = await response.json();
-      return {
-        positive: data.positive || 0,
-        negative: data.negative || 0,
-        owners: data.owners || 'N/A'
-      };
-    }
-
     async function fetchSteamData() {
       const steamIDInput = document.getElementById('steamID').value.trim();
       const apiKey = document.getElementById('apiKey').value.trim();
@@ -154,16 +139,11 @@
             if (excludeOwned && ownedAppIds.has(item.id)) return false;
             return true;
           });
-          for (const g of filtered) {
-            const reviewData = await fetchSteamSpyData(g.id);
-            recommendedGames.push({
-              name: g.name,
-              link: `https://store.steampowered.com/app/${g.id}/`,
-              reason: `Recommended because you like ${genre}`,
-              reviewSummary: `${reviewData.positive} positive, ${reviewData.negative} negative`,
-              owners: reviewData.owners
-            });
-          }
+          recommendedGames.push(...filtered.map(g => ({
+            name: g.name,
+            link: `https://store.steampowered.com/app/${g.id}/`,
+            reason: `Recommended because you like ${genre}`
+          })));
         } catch (e) {
           console.warn("Failed to fetch recommended games for genre:", genre);
         }
@@ -174,7 +154,7 @@
       }, []).slice(0, 10);
 
       similarGames.innerHTML = `<strong>Recommended Games Based on Your Genres:</strong><ul>` +
-        uniqueRecommendations.map(g => `<li><a href="${g.link}" target="_blank">${g.name}</a> - ${g.reason}<br>Reviews: ${g.reviewSummary}<br>Owners: ${g.owners}</li>`).join("") +
+        uniqueRecommendations.map(g => `<li><a href="${g.link}" target="_blank">${g.name}</a> - ${g.reason}</li>`).join("") +
         `</ul>`;
       similarGames.style.display = "block";
     }
