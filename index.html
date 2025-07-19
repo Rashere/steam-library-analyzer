@@ -66,6 +66,13 @@
   </div>
 
   <script>
+    async function fetchWithCORS(url) {
+      const proxyUrl = 'https://api.allorigins.win/raw?url=';
+      const response = await fetch(proxyUrl + encodeURIComponent(url));
+      if (!response.ok) throw new Error(`Network error: ${response.status}`);
+      return response.json();
+    }
+
     async function analyzeLibrary() {
       const apiKey = document.getElementById('apiKey').value.trim();
       const steamId = document.getElementById('steamId').value.trim();
@@ -81,8 +88,7 @@
       output.innerHTML = '<p>Loading...</p>';
 
       try {
-        const libraryResp = await fetch(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${apiKey}&steamid=${steamId}&include_appinfo=true&include_played_free_games=true`);
-        const libraryData = await libraryResp.json();
+        const libraryData = await fetchWithCORS(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key=${apiKey}&steamid=${steamId}&include_appinfo=true&include_played_free_games=true`);
         const games = libraryData.response.games;
 
         games.sort((a, b) => (b.playtime_forever + (b.rtime_last_played || 0)*0.5) - (a.playtime_forever + (a.rtime_last_played || 0)*0.5));
@@ -92,8 +98,7 @@
 
         let topGenres = {};
         for (const game of games.slice(0, 10)) {
-          const appResp = await fetch(`https://store.steampowered.com/api/appdetails?appids=${game.appid}&cc=${region}`);
-          const appData = await appResp.json();
+          const appData = await fetchWithCORS(`https://store.steampowered.com/api/appdetails?appids=${game.appid}&cc=${region}`);
           const genres = appData[game.appid]?.data?.genres || [];
           genres.forEach(g => {
             if (!topGenres[g.description]) topGenres[g.description] = 0;
@@ -106,8 +111,7 @@
 
         let recommendations = [];
         for (const genre of Object.keys(topGenres)) {
-          const searchResp = await fetch(`https://store.steampowered.com/api/storesearch/?term=${genre}&cc=${region}&l=english`);
-          const searchData = await searchResp.json();
+          const searchData = await fetchWithCORS(`https://store.steampowered.com/api/storesearch/?term=${genre}&cc=${region}&l=english`);
           recommendations = recommendations.concat(searchData.items);
         }
 
