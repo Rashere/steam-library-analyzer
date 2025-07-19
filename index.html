@@ -8,7 +8,6 @@
     body { font-family: Arial, sans-serif; padding: 20px; background-color: #f8f9fa; }
     input, button { padding: 10px; margin: 8px 0; width: 100%; max-width: 500px; }
     label { display: block; margin-top: 10px; }
-    pre { background: #212529; color: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto; }
     .error { color: red; }
     .container { max-width: 600px; margin: auto; text-align: center; }
     .recommendations, .similar-games { background: #e9f7ef; color: #155724; padding: 10px; margin-top: 15px; border-radius: 5px; }
@@ -23,7 +22,6 @@
     <label><input type="checkbox" id="includeEarlyAccess" checked /> Include Early Access games</label>
     <label><input type="checkbox" id="includeDemos" checked /> Include Demos</label>
     <button onclick="fetchSteamData()">Analyze My Library</button>
-    <div id="output"></div>
     <div id="recommendations" class="recommendations" style="display:none;"></div>
     <div id="similarGames" class="similar-games" style="display:none;"></div>
     <button id="downloadBtn" style="display:none;" onclick="downloadCSV()">Download CSV</button>
@@ -47,12 +45,8 @@
       const apiKey = document.getElementById('apiKey').value.trim();
       const includeEarlyAccess = document.getElementById('includeEarlyAccess').checked;
       const includeDemos = document.getElementById('includeDemos').checked;
-      const output = document.getElementById('output');
-      const downloadBtn = document.getElementById('downloadBtn');
       const recommendations = document.getElementById('recommendations');
       const similarGames = document.getElementById('similarGames');
-      output.innerHTML = "Loading...";
-      downloadBtn.style.display = "none";
       recommendations.style.display = "none";
       similarGames.style.display = "none";
       try {
@@ -62,13 +56,13 @@
         if (!response.ok) throw new Error(`Steam API error: ${response.status}`);
         const data = await response.json();
         lastData = data;
-        output.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
-        downloadBtn.style.display = "inline-block";
+        document.getElementById('downloadBtn').style.display = "inline-block";
         showRecommendations(data);
         fetchSimilarGames(data, includeEarlyAccess, includeDemos);
       } catch (err) {
         console.error(err);
-        output.innerHTML = `<p class="error">${err.message}</p><p class="error">Using allorigins.win proxy to bypass CORS.</p>`;
+        recommendations.innerHTML = `<p class="error">${err.message}</p>`;
+        recommendations.style.display = "block";
       }
     }
 
@@ -80,17 +74,17 @@
         recommendations.style.display = "block";
         return;
       }
-      const topGames = games.sort((a, b) => b.playtime_forever - a.playtime_forever).slice(0, 5);
-      const titles = topGames.map(g => g.name).join(", ");
-      recommendations.innerHTML = `<strong>Your Top Played Games:</strong><br>${titles}`;
+      const recentGames = games.sort((a, b) => b.rtime_last_played - a.rtime_last_played).slice(0, 5);
+      const titles = recentGames.map(g => g.name).join(", ");
+      recommendations.innerHTML = `<strong>Your Most Recently Played Games:</strong><br>${titles}`;
       recommendations.style.display = "block";
     }
 
     async function fetchSimilarGames(data, includeEarlyAccess, includeDemos) {
       const similarGames = document.getElementById('similarGames');
-      const topGames = data.response.games.sort((a, b) => b.playtime_forever - a.playtime_forever).slice(0, 3);
+      const recentGames = data.response.games.sort((a, b) => b.rtime_last_played - a.rtime_last_played).slice(0, 3);
       let suggestions = [];
-      for (let game of topGames) {
+      for (let game of recentGames) {
         const appId = game.appid;
         const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://store.steampowered.com/api/appdetails?appids=${appId}`)}`;
         try {
@@ -109,7 +103,6 @@
       }
       const uniqueGenres = [...new Set(suggestions)];
 
-      // Fetch recommended games based on genres
       let recommendedGames = [];
       for (let genre of uniqueGenres) {
         try {
@@ -121,13 +114,23 @@
             if (!includeDemos && item.type === "Demo") return false;
             return true;
           });
-          recommendedGames.push(...filtered.map(g => g.name));
+          recommendedGames.push(...filtered.map(g => ({
+            name: g.name,
+            link: `https://store.steampowered.com/app/${g.id}/`,
+            reason: `Recommended because you like ${genre}`
+          })));
         } catch (e) {
           console.warn("Failed to fetch recommended games for genre:", genre);
         }
       }
-      recommendedGames = [...new Set(recommendedGames)].slice(0, 10);
-      similarGames.innerHTML = `<strong>Recommended Games Based on Your Genres:</strong><br>${recommendedGames.join(", ")}`;
+      const uniqueRecommendations = recommendedGames.reduce((acc, curr) => {
+        if (!acc.find(g => g.name === curr.name)) acc.push(curr);
+        return acc;
+      }, []).slice(0, 10);
+
+      similarGames.innerHTML = `<strong>Recommended Games Based on Your Genres:</strong><ul>` +
+        uniqueRecommendations.map(g => `<li><a href="${g.link}" target="_blank">${g.name}</a> - ${g.reason}</li>`).join("") +
+        `</ul>`;
       similarGames.style.display = "block";
     }
 
