@@ -5,50 +5,65 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Steam Library Analyzer</title>
   <style>
-    body { font-family: Arial, sans-serif; background-color: #f8f9fa; margin: 20px; }
-    h1 { color: #333; }
-    label { display: block; margin: 8px 0; }
-    input, select, button { margin: 5px 0; padding: 8px; width: 100%; max-width: 500px; }
-    .recommendation, .top-genres, .top-games { background: #fff; margin: 10px 0; padding: 10px; border-radius: 5px; }
-    .price { font-weight: bold; }
-    .discount-high { color: green; }
-    .discount-medium { color: orange; }
-    .discount-none { color: #555; }
-    .error { color: red; }
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121212; color: #f5f5f5; margin: 0; padding: 0; }
+    .container { max-width: 900px; margin: auto; padding: 20px; }
+    h1 { color: #00adee; text-align: center; margin-bottom: 20px; }
+    label { display: block; margin: 12px 0 6px; font-weight: 500; }
+    input, select, button {
+      width: 100%; max-width: 600px; padding: 10px; border: none; border-radius: 6px; margin-bottom: 15px;
+      font-size: 1rem;
+    }
+    input, select { background: #1e1e1e; color: #f5f5f5; }
+    button {
+      background: #00adee; color: #fff; cursor: pointer; transition: background 0.3s ease;
+    }
+    button:hover { background: #007fa3; }
+    .card {
+      background: #1e1e1e; padding: 15px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.5); margin: 10px 0;
+    }
+    .card a { color: #00adee; font-size: 1.1rem; text-decoration: none; }
+    .price { font-weight: bold; display: block; margin-top: 5px; }
+    .discount-high { color: #4caf50; }
+    .discount-medium { color: #ff9800; }
+    .discount-none { color: #f5f5f5; }
+    .error { color: #f44336; margin-top: 10px; }
+    h2 { border-bottom: 1px solid #333; padding-bottom: 5px; margin-top: 25px; }
   </style>
 </head>
 <body>
-  <h1>🎮 Steam Library Analyzer</h1>
-  
-  <label>Steam API Key:<input type="text" id="apiKey"></label>
-  <label>SteamID64 or Profile URL:<input type="text" id="steamId"></label>
-  <label>
-    Region:
+  <div class="container">
+    <h1>🎮 Steam Library Analyzer</h1>
+    
+    <label>Steam API Key:</label>
+    <input type="text" id="apiKey" placeholder="Enter your Steam API key">
+    <label>SteamID64 or Profile URL:</label>
+    <input type="text" id="steamId" placeholder="Enter SteamID64 or Profile URL">
+    <label>Region:</label>
     <select id="region">
       <option value="us">US</option>
       <option value="eu">EU</option>
       <option value="uk">UK</option>
       <option value="jp">JP</option>
     </select>
-  </label>
-  <label><input type="checkbox" id="excludeOwned"> Exclude games I already own</label>
-  <label><input type="checkbox" id="earlyAccess"> Include Early Access</label>
-  <label><input type="checkbox" id="demos"> Include Demos</label>
-  <label><input type="checkbox" id="onlyOnSale"> Show Only Games on Sale</label>
-  <label><input type="number" id="minReviewScore" placeholder="Min Review Score (0-10)"></label>
-  <label><input type="number" id="minReviewCount" placeholder="Min Review Count"></label>
-  <label>
-    Sort by:
+    <label><input type="checkbox" id="excludeOwned"> Exclude games I already own</label>
+    <label><input type="checkbox" id="earlyAccess"> Include Early Access</label>
+    <label><input type="checkbox" id="demos"> Include Demos</label>
+    <label><input type="checkbox" id="onlyOnSale"> Show Only Games on Sale</label>
+    <label>Min Review Score (0-10):</label>
+    <input type="number" id="minReviewScore" placeholder="e.g. 7">
+    <label>Min Review Count:</label>
+    <input type="number" id="minReviewCount" placeholder="e.g. 100">
+    <label>Sort by:</label>
     <select id="sortBy">
       <option value="default">Default</option>
       <option value="price">Price (Low → High)</option>
       <option value="discount">Biggest Discount</option>
     </select>
-  </label>
-  <button onclick="analyzeLibrary()">Analyze</button>
-  <button onclick="downloadCSV()">Download CSV</button>
+    <button onclick="analyzeLibrary()">Analyze</button>
+    <button onclick="downloadCSV()">Download CSV</button>
 
-  <div id="output"></div>
+    <div id="output"></div>
+  </div>
 
   <script>
     async function analyzeLibrary() {
@@ -72,7 +87,7 @@
 
         games.sort((a, b) => (b.playtime_forever + (b.rtime_last_played || 0)*0.5) - (a.playtime_forever + (a.rtime_last_played || 0)*0.5));
 
-        output.innerHTML = '<div class="top-games"><h2>Your Top Weighted Games:</h2><ul>' +
+        output.innerHTML = '<div class="card"><h2>Your Top Weighted Games:</h2><ul>' +
           games.slice(0, 5).map(g => `<li>${g.name} - ${(g.playtime_forever/60).toFixed(1)} hrs</li>`).join('') + '</ul></div>';
 
         let topGenres = {};
@@ -86,7 +101,7 @@
           });
         }
 
-        output.innerHTML += '<div class="top-genres"><h2>Your Top Genres:</h2><ul>' +
+        output.innerHTML += '<div class="card"><h2>Your Top Genres:</h2><ul>' +
           Object.entries(topGenres).sort((a,b) => b[1]-a[1]).map(([g,c]) => `<li>${g} (${c} games)</li>`).join('') + '</ul></div>';
 
         let recommendations = [];
@@ -119,7 +134,7 @@
           const discount = game.price?.discount_percent || 0;
           const discountClass = discount >= 50 ? 'discount-high' : discount >= 25 ? 'discount-medium' : 'discount-none';
           const review = game.review_score ? `${game.review_score}/10 (${game.review_count} reviews)` : 'No review data';
-          output.innerHTML += `<div class="recommendation">
+          output.innerHTML += `<div class="card">
             <a href="https://store.steampowered.com/app/${game.id}" target="_blank">${game.name}</a><br>
             <span>${review}</span><br>
             <span class="price ${discountClass}">${origPrice ? `${origPrice} → ` : ''}${price} ${discount ? `(-${discount}%)` : ''}</span>
