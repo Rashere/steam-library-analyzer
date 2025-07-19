@@ -24,12 +24,11 @@
   </div>
   <script>
     let lastData = null;
-    const proxy = "https://cors.bridged.cc/"; // Free CORS proxy
 
     async function resolveSteamID64(input, apiKey) {
       if (/^\d{17}$/.test(input)) return input;
       const vanityUrl = input.replace("https://steamcommunity.com/id/", "").replace(/\/$/, "");
-      const url = `${proxy}https://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=${apiKey}&vanityurl=${vanityUrl}`;
+      const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://api.steampowered.com/ISteamUser/ResolveVanityURL/v0001/?key=${apiKey}&vanityurl=${vanityUrl}`)}`;
       const response = await fetch(url);
       if (!response.ok) throw new Error(`Steam API error: ${response.status}`);
       const data = await response.json();
@@ -46,7 +45,7 @@
       downloadBtn.style.display = "none";
       try {
         const steamID = await resolveSteamID64(steamIDInput, apiKey);
-        const gamesURL = `${proxy}https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${apiKey}&steamid=${steamID}&include_appinfo=true&format=json`;
+        const gamesURL = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://api.steampowered.com/IPlayerService/GetOwnedGames/v0001/?key=${apiKey}&steamid=${steamID}&include_appinfo=true&format=json`)}`;
         const response = await fetch(gamesURL);
         if (!response.ok) throw new Error(`Steam API error: ${response.status}`);
         const data = await response.json();
@@ -55,7 +54,7 @@
         downloadBtn.style.display = "inline-block";
       } catch (err) {
         console.error(err);
-        output.innerHTML = `<p class="error">${err.message}</p><p class="error">Using a CORS proxy (https://cors.bridged.cc) to bypass restrictions.</p>`;
+        output.innerHTML = `<p class="error">${err.message}</p><p class="error">Using allorigins.win proxy to bypass CORS.</p>`;
       }
     }
 
