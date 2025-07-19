@@ -16,7 +16,7 @@
 <body>
   <div class="container">
     <h1>🎮 Steam Library Analyzer</h1>
-    <p>Enter your SteamID64 or Profile URL and Steam API Key to analyze your library and get recommendations.</p>
+    <p>Enter your SteamID64 or Profile URL and Steam API Key to analyze your library and get recommendations prioritized by positive reviews.</p>
     <input id="steamID" placeholder="SteamID64 or Profile URL" />
     <input id="apiKey" placeholder="Steam API Key" />
     <label><input type="checkbox" id="includeEarlyAccess" checked /> Include Early Access games</label>
@@ -110,7 +110,7 @@
       let suggestions = [];
       for (let game of weightedGames) {
         const appId = game.appid;
-        const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://store.steampowered.com/api/appdetails?appids=${appId}`)}`;
+        const url = `https://store.steampowered.com/api/appdetails?appids=${appId}`;
         try {
           const response = await fetch(url);
           const appData = await response.json();
@@ -130,7 +130,7 @@
       let recommendedGames = [];
       for (let genre of uniqueGenres) {
         try {
-          const searchUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://store.steampowered.com/api/storesearch/?cc=us&l=en&term=${encodeURIComponent(genre)}&page=1`)}`;
+          const searchUrl = `https://store.steampowered.com/api/storesearch/?cc=us&l=en&term=${encodeURIComponent(genre)}&page=1`;
           const searchResponse = await fetch(searchUrl);
           const searchData = await searchResponse.json();
           const filtered = searchData.items.filter(item => {
@@ -139,10 +139,12 @@
             if (excludeOwned && ownedAppIds.has(item.id)) return false;
             return true;
           });
+          filtered.sort((a, b) => b.review_score - a.review_score);
           recommendedGames.push(...filtered.map(g => ({
             name: g.name,
             link: `https://store.steampowered.com/app/${g.id}/`,
-            reason: `Recommended because you like ${genre}`
+            reason: `Recommended because you like ${genre}`,
+            reviewScore: g.review_score ? `${g.review_score}/10` : 'No score'
           })));
         } catch (e) {
           console.warn("Failed to fetch recommended games for genre:", genre);
@@ -154,7 +156,7 @@
       }, []).slice(0, 10);
 
       similarGames.innerHTML = `<strong>Recommended Games Based on Your Genres:</strong><ul>` +
-        uniqueRecommendations.map(g => `<li><a href="${g.link}" target="_blank">${g.name}</a> - ${g.reason}</li>`).join("") +
+        uniqueRecommendations.map(g => `<li><a href="${g.link}" target="_blank">${g.name}</a> - ${g.reason}<br>Review Score: ${g.reviewScore}</li>`).join("") +
         `</ul>`;
       similarGames.style.display = "block";
     }
