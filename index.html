@@ -77,6 +77,17 @@
       }
     }
 
+    function weightedSort(games) {
+      const now = Math.floor(Date.now() / 1000);
+      return games.map(game => {
+        const hours = game.playtime_forever / 60;
+        const daysSincePlayed = (now - game.rtime_last_played) / 86400;
+        const recencyWeight = Math.max(1, 30 - daysSincePlayed / 7);
+        const totalWeight = hours * 0.6 + recencyWeight * 0.4;
+        return { ...game, weight: totalWeight };
+      }).sort((a, b) => b.weight - a.weight);
+    }
+
     function showRecommendations(data) {
       const recommendations = document.getElementById('recommendations');
       const games = data.response.games;
@@ -85,18 +96,18 @@
         recommendations.style.display = "block";
         return;
       }
-      const recentGames = games.sort((a, b) => b.rtime_last_played - a.rtime_last_played).slice(0, 5);
-      const titles = recentGames.map(g => g.name).join(", ");
-      recommendations.innerHTML = `<strong>Your Most Recently Played Games:</strong><br>${titles}`;
+      const weightedGames = weightedSort(games).slice(0, 5);
+      const titles = weightedGames.map(g => g.name).join(", ");
+      recommendations.innerHTML = `<strong>Your Top Weighted Games:</strong><br>${titles}`;
       recommendations.style.display = "block";
     }
 
     async function fetchSimilarGames(data, includeEarlyAccess, includeDemos, excludeOwned) {
       const similarGames = document.getElementById('similarGames');
       const ownedAppIds = new Set(data.response.games.map(g => g.appid));
-      const recentGames = data.response.games.sort((a, b) => b.rtime_last_played - a.rtime_last_played).slice(0, 3);
+      const weightedGames = weightedSort(data.response.games).slice(0, 3);
       let suggestions = [];
-      for (let game of recentGames) {
+      for (let game of weightedGames) {
         const appId = game.appid;
         const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://store.steampowered.com/api/appdetails?appids=${appId}`)}`;
         try {
