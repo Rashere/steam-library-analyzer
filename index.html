@@ -81,10 +81,11 @@
       const now = Math.floor(Date.now() / 1000);
       return games.map(game => {
         const hours = game.playtime_forever / 60;
+        const lastPlayed = game.rtime_last_played ? new Date(game.rtime_last_played * 1000).toLocaleDateString() : "Never";
         const daysSincePlayed = (now - game.rtime_last_played) / 86400;
         const recencyWeight = Math.max(1, 30 - daysSincePlayed / 7);
         const totalWeight = hours * 0.6 + recencyWeight * 0.4;
-        return { ...game, weight: totalWeight };
+        return { ...game, weight: totalWeight, hoursPlayed: hours.toFixed(1), lastPlayed: lastPlayed };
       }).sort((a, b) => b.weight - a.weight);
     }
 
@@ -97,8 +98,8 @@
         return;
       }
       const weightedGames = weightedSort(games).slice(0, 5);
-      const titles = weightedGames.map(g => g.name).join(", ");
-      recommendations.innerHTML = `<strong>Your Top Weighted Games:</strong><br>${titles}`;
+      const details = weightedGames.map(g => `<li>${g.name} - ${g.hoursPlayed} hrs, Last Played: ${g.lastPlayed}</li>`).join("");
+      recommendations.innerHTML = `<strong>Your Top Weighted Games:</strong><ul>${details}</ul>`;
       recommendations.style.display = "block";
     }
 
@@ -142,7 +143,8 @@
             name: g.name,
             link: `https://store.steampowered.com/app/${g.id}/`,
             reason: `Recommended because you like ${genre}`,
-            reviews: g.reviews_summary || "No review data"
+            reviewScore: g.review_score ? g.review_score + '/10' : 'No score',
+            reviewCount: g.review_count ? g.review_count + ' reviews' : 'No review count'
           })));
         } catch (e) {
           console.warn("Failed to fetch recommended games for genre:", genre);
@@ -154,7 +156,7 @@
       }, []).slice(0, 10);
 
       similarGames.innerHTML = `<strong>Recommended Games Based on Your Genres:</strong><ul>` +
-        uniqueRecommendations.map(g => `<li><a href="${g.link}" target="_blank">${g.name}</a> - ${g.reason}<br>${g.reviews}</li>`).join("") +
+        uniqueRecommendations.map(g => `<li><a href="${g.link}" target="_blank">${g.name}</a> - ${g.reason}<br>Reviews: ${g.reviewScore} (${g.reviewCount})</li>`).join("") +
         `</ul>`;
       similarGames.style.display = "block";
     }
