@@ -66,9 +66,16 @@
   </div>
 
   <script>
+    window.onload = function() {
+      document.getElementById('apiKey').value = localStorage.getItem('apiKey') || '';
+      document.getElementById('steamId').value = localStorage.getItem('steamId') || '';
+    }
+
     async function fetchWithCORS(url) {
-      const proxyUrl = 'https://api.allorigins.win/raw?url=';
-      const response = await fetch(proxyUrl + encodeURIComponent(url));
+      const proxyUrl = 'https://cors.bridged.cc/';
+      const response = await fetch(proxyUrl + url, {
+        headers: { 'x-cors-grida-api-key': 'tryout' }
+      });
       if (!response.ok) throw new Error(`Network error: ${response.status}`);
       return response.json();
     }
@@ -76,6 +83,8 @@
     async function analyzeLibrary() {
       const apiKey = document.getElementById('apiKey').value.trim();
       const steamId = document.getElementById('steamId').value.trim();
+      localStorage.setItem('apiKey', apiKey);
+      localStorage.setItem('steamId', steamId);
       const region = document.getElementById('region').value;
       const excludeOwned = document.getElementById('excludeOwned').checked;
       const earlyAccess = document.getElementById('earlyAccess').checked;
