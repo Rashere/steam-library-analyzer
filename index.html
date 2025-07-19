@@ -43,6 +43,18 @@
       if (savedApiKey) document.getElementById('apiKey').value = savedApiKey;
     };
 
+    function weightedSort(games) {
+      const now = Math.floor(Date.now() / 1000);
+      return games.map(game => {
+        const hours = game.playtime_forever / 60;
+        const lastPlayed = game.rtime_last_played ? new Date(game.rtime_last_played * 1000).toLocaleDateString() : "Never";
+        const daysSincePlayed = (now - game.rtime_last_played) / 86400;
+        const recencyWeight = Math.max(1, 30 - daysSincePlayed / 7);
+        const totalWeight = hours * 0.6 + recencyWeight * 0.4;
+        return { ...game, weight: totalWeight, hoursPlayed: hours.toFixed(1), lastPlayed: lastPlayed };
+      }).sort((a, b) => b.weight - a.weight);
+    }
+
     async function resolveSteamID64(input, apiKey) {
       if (/^\d{17}$/.test(input)) return input;
       const vanityUrl = input.replace("https://steamcommunity.com/id/", "").replace(/\/$/, "");
