@@ -72,8 +72,10 @@
     }
 
     async function fetchWithCORS(url) {
-      const proxyUrl = 'https://api.allorigins.win/raw?url=';
-      const response = await fetch(proxyUrl + encodeURIComponent(url));
+      const proxyUrl = 'https://cors.bridged.cc/';
+      const response = await fetch(proxyUrl + url, {
+        headers: { 'x-cors-grida-api-key': 'tryout' }
+      });
       if (!response.ok) throw new Error(`Network error: ${response.status}`);
       return response.json();
     }
